@@ -67,7 +67,7 @@ public class SuffixTree {
     }
 
     private void update(int index, InternalNode previousNode) {
-/*        System.out.println("===UPDATE CALLED===");
+        System.out.println("===UPDATE CALLED===");
         System.out.println("Suffix: " + this.source.substring(0, endMarker.get()));
         System.out.println("Active Node: " + activeNode.getCreationNumber());
         System.out.println("Active Edge: " + activeEdge);
@@ -75,61 +75,66 @@ public class SuffixTree {
         System.out.println("Remainder: " + remainder);
         System.out.println("Index: " + index);
         System.out.println("previousNode: " + previousNode);
-        System.out.println(this);*/
+        System.out.println(this);
 
         char lastChar = source.charAt(index);
+
+        //Update rule lambdas
+        Runnable rule1 = () -> {
+            if (activeNode.isRoot() && activeLength > 0) {
+                --activeLength;
+                activeEdge = source.charAt(index - activeLength);
+            }
+        };
+
+        Consumer<InternalNode> rule2 = iNode -> {
+            if (previousNode != null) {
+                previousNode.setSuffixLink(iNode);
+                suffixLinks.put(previousNode.getCreationNumber(), iNode.getCreationNumber());
+            }
+        };
+
+        Runnable rule3 = () -> {
+            if (!activeNode.isRoot()) {
+                if (activeNode.hasSuffixLink())
+                    activeNode = activeNode.getSuffixLink();
+                else
+                    activeNode = root;
+            }
+        };
+
+        Consumer<InternalNode> allRules = iNode -> {
+            rule1.run();
+            rule2.accept(iNode);
+            rule3.run();
+        };
+
+        //Position validation lambda
+        Runnable checkPos = () -> {
+            if (activeEdge != null && activeNode.hasEdge(activeEdge)) {
+                Edge aEdge = activeNode.getEdge(activeEdge);
+                while (aEdge != null && activeLength >= aEdge.getLength()) {
+                    activeNode = (InternalNode) aEdge.getTo();
+                    activeLength -= aEdge.getLength();
+                    activeEdge = source.charAt(index - activeLength);
+                    aEdge = activeNode.getEdge(activeEdge);
+                }
+            }
+        };
 
         if (activeEdge == null || activeLength == 0) {//do update directly at current node
             //Case 1: lastChar is already present in this node, so just update active point
             if (activeNode.hasEdge(lastChar)) {
                 ++activeLength;
-
-                //Update rules
-
-                //Rule 2
-                if (previousNode != null) {
-                    previousNode.setSuffixLink(activeNode);
-                    suffixLinks.put(previousNode.getCreationNumber(), activeNode.getCreationNumber());
-                }
-
-
                 activeEdge = lastChar;
-                Edge aEdge = activeNode.getEdge(activeEdge);
-                if (activeLength == aEdge.getLength()) {
-                    activeNode = (InternalNode) aEdge.getTo();
-                    activeEdge = null;
-                    activeLength = 0;
-                }
+                checkPos.run();
             } else { //Case 2: directly insert new edge into node, terminating in a leaf
                 Edge edge = new Edge(activeNode, new LeafNode(), index, endMarker);
                 activeNode.addEdgeOut(lastChar, edge);
                 --remainder;
-
-                //Update rules
-                //Rule 1:
-                if (activeNode.isRoot() && activeLength > 0) {
-                    --activeLength;
-                    activeEdge = source.charAt(index - activeLength);
-                }
-
-                //Rule 2
-                if (previousNode != null) {
-                    previousNode.setSuffixLink(activeNode);
-                    suffixLinks.put(previousNode.getCreationNumber(), activeNode.getCreationNumber());
-                }
-
-                //Rule 3:
-                if (!activeNode.isRoot()) {
-                    if (activeNode.hasSuffixLink())
-                        activeNode = activeNode.getSuffixLink();
-                    else
-                        activeNode = root;
-                }
-
-                InternalNode prevNode = activeNode;
-
+                allRules.accept(activeNode);
                 if (remainder > 0)
-                    update(index, prevNode);
+                    update(index, activeNode);
             }
         } else { //activePoint points to a point along an existing edge
             Edge aEdge = activeNode.getEdge(activeEdge);
@@ -138,19 +143,7 @@ public class SuffixTree {
             //Case 1: this next point matches lastChar, so just update activeLength
             if (activePointChar == lastChar) {
                 ++activeLength;
-
-                //Update rules
-                //Rule 2
-                if (previousNode != null) {
-                    previousNode.setSuffixLink(activeNode);
-                    suffixLinks.put(previousNode.getCreationNumber(), activeNode.getCreationNumber());
-                }
-
-                if (activeLength == aEdge.getLength()) {
-                    activeNode = (InternalNode) aEdge.getTo();
-                    activeEdge = null;
-                    activeLength = 0;
-                }
+                checkPos.run();
             } else { //Case 2: this edge needs to be split at this point
                 InternalNode iNode = new InternalNode();
                 iNode.addEdgeOut(activePointChar, new Edge(iNode, aEdge.getTo(), pos, aEdge.getEnd()));
@@ -158,37 +151,8 @@ public class SuffixTree {
                 aEdge.setEnd(new AtomicInteger(pos));
                 aEdge.setTo(iNode);
                 --remainder;
-
-                //Update rules
-                //Rule 1:
-                if (activeNode.isRoot()) {
-                    --activeLength;
-                    activeEdge = source.charAt(index - activeLength);
-                }
-
-                //Rule 2:
-                if (previousNode != null) {
-                    previousNode.setSuffixLink(iNode);
-                    suffixLinks.put(previousNode.getCreationNumber(), iNode.getCreationNumber());
-                }
-
-                //Rule 3:
-                if (!activeNode.isRoot()) {
-                    if (activeNode.hasSuffixLink())
-                        activeNode = activeNode.getSuffixLink();
-                    else
-                        activeNode = root;
-                }
-
-                if (activeNode.hasEdge(activeEdge)) {
-                    aEdge = activeNode.getEdge(activeEdge);
-                    if (activeLength == aEdge.getLength()) {
-                        activeNode = (InternalNode) aEdge.getTo();
-                        activeEdge = null;
-                        activeLength = 0;
-                    }
-                }
-
+                allRules.accept(iNode);
+                checkPos.run();
                 if (remainder > 0)
                     update(index, iNode);
             }

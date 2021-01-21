@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-public class SuffixTree {
+public static class SuffixTree {
     private String source;
     private RootNode root;
     private InternalNode activeNode;
@@ -35,15 +35,6 @@ public class SuffixTree {
 
             //Second: determine if insert is necessary, or update active points
             update(i, null);
-
-/*            System.out.println("=====STAGE " + endMarker.get() + "=====");
-            System.out.println("Suffix: " + this.source.substring(0, endMarker.get()));
-            System.out.println("Active Node: " + activeNode.getCreationNumber());
-            System.out.println("Active Edge: " + activeEdge);
-            System.out.println("Active Length: " + activeLength);
-            System.out.println("Remainder: " + remainder);
-            System.out.println(this);
-            System.out.println("=====STAGE " + endMarker.get() + "=====");*/
         }
     }
 
@@ -66,17 +57,19 @@ public class SuffixTree {
         return sum + 1;
     }
 
-    private void update(int index, InternalNode previousNode) {
-        System.out.println("===UPDATE CALLED===");
-        System.out.println("Suffix: " + this.source.substring(0, endMarker.get()));
-        System.out.println("Active Node: " + activeNode.getCreationNumber());
-        System.out.println("Active Edge: " + activeEdge);
-        System.out.println("Active Length: " + activeLength);
-        System.out.println("Remainder: " + remainder);
-        System.out.println("Index: " + index);
-        System.out.println("previousNode: " + previousNode);
-        System.out.println(this);
+    public int getInternalNodeDepth() {
+        return getDeepestInternalNodeImpl(root);
+    }
 
+    private int getDeepestInternalNodeImpl(InternalNode iNode) {
+        return iNode.getEdgesOut().values().stream()
+                .filter(e -> e.getTo().isExplicit())
+                .mapToInt(e -> e.getLength() + getDeepestInternalNodeImpl((InternalNode) e.getTo()))
+                .max()
+                .orElseGet(() -> 0);
+    }
+
+    private void update(int index, InternalNode previousNode) {
         char lastChar = source.charAt(index);
 
         //Update rule lambdas
@@ -122,19 +115,31 @@ public class SuffixTree {
             }
         };
 
+        Consumer<InternalNode> jumpLink = iNode -> {
+            iNode.setSuffixLink(activeNode);
+            suffixLinks.put(iNode.getCreationNumber(), activeNode.getCreationNumber());
+        };
+
         if (activeEdge == null || activeLength == 0) {//do update directly at current node
             //Case 1: lastChar is already present in this node, so just update active point
             if (activeNode.hasEdge(lastChar)) {
+                if (previousNode != null)
+                    jumpLink.accept(previousNode);
                 ++activeLength;
                 activeEdge = lastChar;
                 checkPos.run();
             } else { //Case 2: directly insert new edge into node, terminating in a leaf
                 Edge edge = new Edge(activeNode, new LeafNode(), index, endMarker);
                 activeNode.addEdgeOut(lastChar, edge);
+                InternalNode fromNode = activeNode;
                 --remainder;
                 allRules.accept(activeNode);
-                if (remainder > 0)
-                    update(index, activeNode);
+                if (remainder > 0) {
+                    if (fromNode.isRoot())
+                        update(index, null);
+                    else
+                        update(index, fromNode);
+                }
             }
         } else { //activePoint points to a point along an existing edge
             Edge aEdge = activeNode.getEdge(activeEdge);
@@ -142,6 +147,8 @@ public class SuffixTree {
             char activePointChar = source.charAt(aEdge.getStart() + activeLength);
             //Case 1: this next point matches lastChar, so just update activeLength
             if (activePointChar == lastChar) {
+                if (previousNode != null)
+                    jumpLink.accept(previousNode);
                 ++activeLength;
                 checkPos.run();
             } else { //Case 2: this edge needs to be split at this point

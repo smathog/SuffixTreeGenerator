@@ -4,6 +4,8 @@ This is my implementation of Ukkonen's algorithm in Java. This started as an att
 
 Notably, Ukkonen's algorithm is an O(n) suffix tree construction algorithm (for constant-sized alphabets). Once a suffix tree is obtained, it is a simple matter to calculate the number of distinct substrings (this is equivalent to the number of characters on all edges of the suffix tree), which is again a O(n) algorithm; so the entire algorithm ought to be O(n), which should hopefully solve my problem. 
 
-I do not presume guarantee correctness, but this implementation does seem to test the simple test cases I have manually run through it. 
+I do not presume guarantee correctness, but this implementation does seem to test correctly on the simple test cases I have manually run through it. 
 
 The following SO link was particularly helpful: https://stackoverflow.com/questions/9452701/ukkonens-suffix-tree-algorithm-in-plain-english/9513423#9513423 
+
+Note: I found that both the first and second replies on the above link are necessary in order to get the algorithm to work correctly (otherwise, important suffix links are missing that can lead to missing edges/nodes on long, highly repeating strings).
